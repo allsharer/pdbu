@@ -1,0 +1,548 @@
+#!/bin/bash
+
+##=======================================================================================
+## PDBU -- Perosnal Data Backup Utility (v. 3.0) -- by Trevor Headley (August 24, 2018)
+##
+##
+## A Script to create a backup of /home on an external USB drive.
+##
+## The Help Template is taken from the XBT project on the internet.
+##
+## Enjoy!
+##========================================================================================
+
+clear
+
+# =================== Begin User Default Settings ======================
+# These User Default Settings can be manually adjusted in /home/$USER/.config/pdbu/pdbu.config.
+# The path to and name of the config file can be set in the Internal Settings section below.
+# The variables to adjust are BCD and BCF.
+
+## SET: Flag for local or ssh backup
+XuseSSH=false
+
+## SET: Backup interval in days:
+XBID="2"
+
+## SET: Time in seconds for buzzer:
+XTIS="0"
+
+## SET: SSH user
+XsshUser="trevor"
+
+## SET: IP address of SSH server
+XsshIp="192.168.0.20"
+
+## SET: SSH server port
+XsshPort="22"
+
+## SET: Show window if backup is OK at each autostart
+XshowBackupOK=false
+
+## SET: Backup media Label:
+XBML="ext-hd" # Backup_Media_Label
+# ============================ End User Settings ======================
+
+# ============================ Begin Internal Settings ======================
+## SET: Version Number:
+version="3.0"
+
+## SET: Backup Storage Directory:
+BSD="pdbu-backups"  # Backup_Storage_Directory
+
+## SET: Parent of the $HOME directory
+homeParent=$(dirname "$HOME" | cut -b 2-)
+
+## SET: Control Directory and filenames:
+BCD=".config/pdbu"  # Backup_Config_Directory
+BCF="pdbu.config"  # Backup_Configuration_File
+backupLog="backup.log"
+lastBackupTimeLog="lastBackupTime.log"
+exitLog="exit.log"
+
+## SET: Bash variable $1 to --backup if unset or null:
+if [ -z "$1" ]; then
+    set -- "--backup"
+fi
+
+# SET: The internal variables with those in the config file, or use the above defaults if not set.
+. "$HOME/$BCD/$BCF" 2> /dev/null
+[ -z $useSSH ] && useSSH=$XuseSSH
+[ -z $BID ] && BID=$XBID
+[ -z $TIS ] && TIS=$XTIS
+[ -z $sshUser ] && sshUser=$XsshUser
+[ -z $sshIp ] && sshIp=$XsshIp
+[ -z $sshPort ] && sshPort=$XsshPort
+[ -z $showBackupOK ] && showBackupOK=$XshowBackupOK
+[ -z $BML ] && BML=$XBML
+
+## SET: Backup's Destination Directory Name:
+if ! "$useSSH"; then
+	## SET: Determine backup drive's partition:
+	partition=$(mount | grep "$BML" | cut -b 6-9) > /dev/null
+
+	## SET: Backup's Destination Directory:
+	BDD="/media/$LOGNAME/$BML/$BSD/$HOSTNAME"
+else
+	## SET: Backup's Destination Directory:
+	BDD="/media/$sshUser/$BML/$BSD/$HOSTNAME"  # Remote drive via ssh
+fi
+# ============================ End Internal Settings ======================
+
+testIfFirstRun() {
+if [ ! -d "$HOME/$BCD" ]; then
+    local firstRun="FIRST RUN! Creating $HOME/$BCD directory 
+and setting permissions...."
+    doHeader "$firstRun"
+    mkdir "$HOME/$BCD"
+    chmod 755 "$HOME/$BCD"
+fi
+}
+
+createConfigFile() {
+if [ ! -f "$HOME/$BCD/$BCF" ]; then
+	conf="$HOME/$BCD/$BCF"
+	touch "$conf"
+    	chmod +x "$conf" 
+	echo "#!/bin/bash" >> "$conf"
+	echo "#" >> "$conf"
+    	echo "# Personal Data Backup Utility (PDBU) Configuration File" >> "$conf"
+    	echo "# The default user adjustable variables are listed in this file." >> "$conf"
+	echo "# These settings can be adjusted from this file by adjusting the relevant variable." >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Change to true if you are using a SSH server to store backups. Default:false" >> "$conf"
+	echo "useSSH=$XuseSSH" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Backup will be done at the frequency set, in days, by this variable. Default:2" >> "$conf"
+	echo "BID=$XBID" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Sets the time in seconds for buzzer to sound after backup finishes. Default:0" >> "$conf"
+	echo "TIS=$XTIS" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Show popup window at bootup saying that backup is up-to-date. Default:false" >> "$conf"
+    	echo "# For this to work when enabled, place the command 'pdbu --check' to autorun at startup." >> "$conf"
+	echo "showBackupOK=$XshowBackupOK" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+    	echo "# You many use any appropriately sized EXT3/EXT4 formatted usb drive as your destination drive." >> "$conf"
+	echo "# Place the label of the drive below to use it as your pdbu destination drive. Default:ext-hd" >> "$conf" 
+	echo "BML=$XBML" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Place your SSH login username here." >> "$conf"
+	echo "sshUser=$XsshUser" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# Place the IP address of the SSH server here." >> "$conf"
+	echo "sshIp=$XsshIp" >> "$conf"
+	echo "#" >> "$conf"
+	echo "#" >> "$conf"
+	echo "# The port of the server through which SSH will communicate. Default:22" >> "$conf"
+	echo "sshPort=$XsshPort" >> "$conf"
+fi
+}
+
+createExclusions() {
+# SET: Initialize exclusions.txt
+if ! [ -f "$HOME/$BCD/exclusions.txt" ]; then
+    exclusions="VM-DISK* qemu-disk* backups-rsynced* timeshift* rsync* temporary*"
+    exclusionsFmt=$( formatExclusions $exclusions )  # Format exclusions 1 exclusion per line
+    echo "$exclusionsFmt" > $HOME/$BCD/exclusions.txt  # Save formated exclusions to the exclusions.txt file
+fi
+}
+
+testDestDir() {
+if ! "$useSSH"; then
+	if [ ! -d "$BDD" ]; then
+		mkdir -p "$BDD"
+	fi
+else
+	if [ ! -d "$sshUser@sshIp:$BDD" ]; then
+		mkdir -p "$sshUser@sshIp:$BDD"
+	fi
+fi
+}
+
+showHelp() {
+## Echo Help Page into less utility then exit:
+    echo "
+ PDBU -- Personal Data Backup Utility -- Help Page
+ (v. $version)
+
+ Commands:
+
+ pdbu           = Makes a PDBU exclusive backup based on the set interval.
+ pdbu --force   = Disregards set interval and forces an On-Demand backup.
+ pdbu --help    = Prints this help information.
+ pdbu --restore = Fully restores system's /home directory.
+ pdbu --log     = Prints the log file to screen.
+ pdbu --check   = Checks if backup is due and notifies user via a text box.
+                  Intended to be used with startup applications.
+ q              = Exit this Help Page.
+
+ Exit Codes:
+    0 = Backup completed successfully.
+    1 = Backup completed with errors.
+    2 = Destinaion media not found.
+    3 = Backup interval not reached.
+    4 = Bad command line option received.
+
+ Description:
+
+ PDBU will update files that have changed, remove files that have been
+ deleted and add any new files that have been created since the last backup.
+ The initial backup may take a long time, especially if you have a lot of data stored
+ in your system's /home directory. PDBU creates a directory with the host name
+ of the machine it's backing up from inside PDBU-Backups. This allows users to
+ share the drive with multiple machines.
+
+ The directory structure and all files are stored openly to allow users easy
+ access if they only need to retrieve a few files or directories using a file
+ manager. Data can be restored with the built in emergency "pdbu restore"
+ command if the user wants to roll back to the exact state of /home when the
+ last backup was taken.
+
+ A simple log file is added to the PDBU-Backups directory that shows when each
+ backup is taken and any errors that might occur. This file is appended
+ every time PDBU is run.
+
+ Requirements:
+
+ PDBU is designed to work with Ubuntu and Linux Mint but it should run
+ on many other Linux distributions. You need to set the PDBU variable
+ (BML) to the destination drive's label. The destination USB drive must be
+ formatted to a Linux native file system such as Ext4 to ensure that file
+ permissions will be stored unchanged. The USB drive needs to have enough
+ free capacity to store all data in /home on all of the machines you want to
+ use the drive for.
+
+ Disclaimer:
+
+ THIS SOFTWARE IS CREATED FOR PERSONAL USE BUT MAY BE USED “AS IS” AND ANY
+ EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED.  IN NO EVENT SHALL THE OWNER OF THIS SOFTWARE BE LIABLE FOR ANY 
+ DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+ (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+" | less
+   exit
+}
+
+doHeader() {
+## Header:
+clear
+echo ""
+echo ""
+echo "PDBU -- Personal Data Backup Utility (Version $version)"
+echo "              by T.D Headley (c)2018 "
+echo "===================================================="
+echo "$1"
+echo
+}
+
+doExit() {
+sync  # Ensures cached data is written to disk before continuing
+
+# Write formated exit info to log file and screen:
+local mPri="$1"
+upPri="${mPri^^}"  # Set mPri to UPPER CASE
+local report="$upPri! - $2 On : `date`"
+if ! [ "$5" == "NoLog" ]; then  # write exit info only to screen if NoLog is passed.
+    echo $report >> $HOME/$BCD/$exitLog
+fi
+echo
+echo "$upPri: $2"
+echo "$3"
+echo
+if [ "$4" == "0" ]; then
+    theFreq="1000"
+elif [ "$4" == "1" ]; then
+    theFreq="500"
+else
+    theFreq="2000"
+    TIS=".25"
+fi
+((speaker-test -tsine -f"$theFreq") & pid=$!; sleep "$TIS"s; kill -9 $pid) &> /dev/null  #sounds a tone
+read -t 1 -n 10000 discard  # Clear unintended inputs during programme run.
+exit "$4"
+}
+
+isBackupNeeded() {
+## Backup set to occur every number of days set by BID
+## This tests if interval has passed since last backup
+local DIS=86400  # DaysInSeconds is 86400
+local BIS=$(($BID*$DIS))  # Seconds to wait before next backup.
+local nowDate=$(date +%s) # Current date in seconds
+
+if [ ! -f $HOME/$BCD/$lastBackupTimeLog ]; then # Tests if info on last backup exists and creates it if not
+    local ILBD=$(($nowDate - $BIS - 600))  # Calculates Initial_Last_Backup_Date 2 days and 10 minutes into the past
+    echo "$ILBD" > $HOME/$BCD/$lastBackupTimeLog  # Creates and initializes lastBackup.txt with ILBD
+fi
+
+local lastDate=$(<$HOME/$BCD/$lastBackupTimeLog)
+local timePast=$(($nowDate - $lastDate))
+
+if [ "$timePast" -lt "$BIS" ]; then
+    return 1
+else
+    return 0
+fi
+}
+
+isBackupMediaMounted() {
+## Check if backup media is mounted
+if ! "$useSSH"; then
+	mount | grep "/dev/$partition on /media/$LOGNAME/$BML type" > /dev/null
+	return $?
+else
+	ssh $sshUser@$sshIp ls /media/$sshUser/$BML > /dev/null
+	return $?
+fi
+}
+
+doWindowMinMax() {
+## Minimize or Restore the backup window
+if [ -z "$WID" ]; then
+    ## Minimize the windows
+    WID=$(xdotool getactivewindow)
+    xdotool windowminimize $WID
+else
+    ## Restore the windows:
+    xdotool windowactivate $WID
+    WID=""
+fi
+}
+
+formatExclusions() {
+# Embed newline to variable with space separated list
+   local p="$1"
+   shift
+   for i in "$@"
+   do
+      p="$p
+$i"                      # Append
+   done
+   echo "$p"
+}
+
+showLog() {
+    local logFile="$HOME/$BCD/$exitLog"
+    tac $logFile | less
+    exit
+}
+
+authenticate() {
+echo "Please Authenticate...."
+sudo ls > /dev/null
+if ! [ $? = 0 ]; then
+#echo ""
+echo "Authentication Failed: Exiting programme...."
+echo ""
+    exit
+else
+    echo "Authenticated...."
+fi
+}
+
+doExecRsync() {
+echo ""
+doHeader "Executing PDBU User Option!
+$choiceLbl is in prgress, please wait...."
+echo "$5"
+echo ""
+
+if ! "$useSSH"; then
+	sudo rsync "$1" --exclude-from=$HOME/$BCD/exclusions.txt --delete --info=progress2 "$3" "$4" 2>> $HOME/$BCD/$backupLog
+	return $?
+else
+	sudo rsync "$1" -e "ssh -p $sshPort" --exclude-from=$HOME/$BCD/exclusions.txt --delete --info=progress2 "$3" "$4" 2>> $HOME/$BCD/$backupLog
+	return $?
+fi
+}
+
+writeDestDirLog() {
+echo "_______
+-- Backup Fully Completed! -- `date`
+" >> $HOME/$BCD/$backupLog
+
+## Append $HOME/$BCD/$backupLog to backup media
+if ! "$useSSH"; then
+	cat $HOME/$BCD/$backupLog | tee -a "$BDD/$backupLog" > /dev/null
+else
+	cat $HOME/$BCD/$backupLog | ssh $sshUser@$sshIp "tee -a $BDD/$backupLog" > /dev/null
+fi
+}
+
+getConfirm() {
+echo "$1"
+echo "$2"
+echo ""
+read -p "Please type yEs then press [enter] to continue: " selection 
+echo ""
+if [ "$selection" == "yEs" ]; then
+    return 0
+else
+    return 1
+fi
+}
+
+setEnv() {
+local isOption=1
+
+## Setup environment variables:
+sourceDir="/$homeParent"
+if ! "$useSSH"; then
+	destDir="$BDD/"
+else
+	destDir="$sshUser@$sshIp:$BDD/"
+fi
+
+procInfo="Backing up: $sourceDir Directory......."
+firstBackupOptions="-aAXH"
+if [ "$1" == "--backup" ]; then
+    choiceLbl="Scheduled Backup"
+    isOption=0
+fi
+if [ "$1" == "--force" ]; then
+    BID=0
+    choiceLbl="On-Demand Backup"
+    isOption=0
+fi
+
+if [ "$1" == "--restore" ]; then
+    doHeader "Initializing Restore Process!
+Please wait...."
+    if ! getConfirm "WARNING!!! The data on your hard drive will be replaced with your last backup. " "Are you sure this is what you want to do?"; then
+        doExit "USER CANCELED OPERATION!!!" "Restore IS Aborted." "Notice: To restore data, you must type (yEs), as in brackets, when prompted." "0"
+    fi
+choiceLbl="Restore"
+
+    if ! "$useSSH"; then
+        sourceDir="$BDD/$homeParent/$LOGNAME/"
+    else
+	    sourceDir="$sshUser@$sshIp:$BDD/$homeParent/$LOGNAME/"
+    fi
+
+    destDir="/$homeParent/$LOGNAME/"
+    procInfo="Restoring files to $destDir  Directory......."
+    #procNoteInfo="NOTICE: ALL data are being restored from backup......."
+    firstBackupOptions="-aAXH"
+    isOption=0
+fi
+if [ "$1" == "--help" ]; then
+    showHelp
+fi
+if [ "$1" == "--log" ]; then
+    showLog
+fi
+
+if [ "$1" == "--check" ]; then
+    if isBackupNeeded; then
+        zenity --question --no-wrap --text="Your backup is outdated. Do you want to do a backup now?" --title="PDBU Attention!!" > /dev/null
+            if [ "$?" == "0" ]; then
+                statusFile=$(mktemp)
+                xterm -e bash -c 'pdbu; echo $? > '$statusFile
+                pdbuExitCode=$(cat $statusFile)
+                rm $statusFile
+                if [ "$pdbuExitCode" == "0" ]; then
+                    bText="Backup was completed successfully!"
+                    bTitle="PDBU Information"
+                elif [ "$pdbuExitCode" == "2" ]; then
+                    bTitle="PDBU Disk ERROR"
+                    bText="The destination drive could not be found.\n\nPlease ensure it is connected then run backup again."
+                else
+                    bTitle="PDBU Warning!!"
+                    bText="Errors were reported upon completion of backup.\n\nPlease check logs at ~/$BCD for more information."
+                fi
+                zenity --info --no-wrap --text="$bText" --title="$bTitle" > /dev/null
+            fi
+        exit
+    fi
+    if "$showBackupOK"; then
+        zenity --info --no-wrap --text="Your backup is up-to-date!" --title="PDBU Information" > /dev/null
+    fi
+    exit
+fi
+
+if ! [ "$isOption" == 0 ]; then
+    doHeader "Executing PDBU User Option!"
+    doExit "Bad Option" "Backup Aborted" "Please type pdbu --help for correct syntax." "4"
+fi
+}
+
+##======================================================================
+# START THE MAIN PROCESS
+##======================================================================
+
+echo ""
+
+testIfFirstRun
+createConfigFile
+createExclusions
+setEnv $1
+testDestDir
+
+doHeader "Initializing Backup!
+Checking if backup is older than $BID days...."
+if [ "$1" == "--backup" ]; then
+    if ! isBackupNeeded; then
+        doExit "No Backup Scheduled!" "Backup Disregarded." "Backup is set to occur every $BID days and you did 
+a backup less than $BID days ago. Please change interval 
+or Use <pdbu --force> to fource full backup" "3" "NoLog"
+    fi
+fi
+
+doHeader "Initializing Backup!
+Checking if destination drive is connected...."
+if ! isBackupMediaMounted; then
+	if ! "$useSSH"; then
+        doExit "Backup Media Not Found!" "Backup Aborted." "Please make sure disk labelled $BML is connected,
+then try again...." "2"
+	else
+	doExit "Backup Media Not Found!" "Backup Aborted." "Please make sure disk labelled $sshUser@$sshIp:/media/$sshUser/$BML is connected,
+then try again...." "2"
+	fi
+else
+doHeader "Initializing Backup!
+Checking if destination drive is connected. Media Found...."
+fi
+
+## Log file is created in $HOME/$BCD:
+if [ -f "$HOME/$BCD/$backupLog" ]; then rm $HOME/$BCD/$backupLog; fi  # Only the most recent backup required here
+if ! "$useSSH"; then
+	echo "$choiceLbl sent to $BDD USB drive from $HOSTNAME by $LOGNAME on:" >> $HOME/$BCD/$backupLog
+else
+    echo "$choiceLbl sent to $sshUser@$sshIp:$BDD USB drive from $HOSTNAME by $LOGNAME on:" >> $HOME/$BCD/$backupLog
+fi
+echo `date` >> $HOME/$BCD/$backupLog
+echo "Errors:" >> $HOME/$BCD/$backupLog
+
+authenticate
+
+if doExecRsync "$firstBackupOptions" "$exclusions" "$sourceDir" "$destDir" "$procInfo" "$procNoteInfo"; then
+    echo ""
+    echo "Completing the process: Please Wait......."
+    echo ""
+    writeDestDirLog "$choiceLbl Fully Completed!"  # Writes log info to destination directory
+    date +%s > $HOME/$BCD/$lastBackupTimeLog  #Set the last backup date and time
+    #spkSound=$((speaker-test -t sine -f 1000) & pid=$!; sleep "$TIS"s; kill -9 $pid) &> /dev/null  #sounds a tone
+    doExit "Successful!" "$choiceLbl Completed" "You may now safely remove backup media if so desired." "0"
+else
+    echo ""
+    echo "Completing the process: Please Wait......."
+    echo ""
+    writeDestDirLog "$choiceLbl Exited with Rsync error!"  # Writes log info to destination directory
+	if ! "$useSSH"; then
+    	doExit "Rsync Error:" "$choiceLbl Completed With Errors!" "Please check $HOME/$BCD/$exitLog or $BDD/$backupLog" "1"
+	else
+	    doExit "Rsync Error:" "$choiceLbl Completed With Errors!" "Please check $HOME/$BCD/$exitLog or $sshUser@$sshIp:$BDD/$backupLog" "1"
+	fi
+fi
