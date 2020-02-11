@@ -5,7 +5,7 @@ PDBU -- Personal Data Backup Utility -- README
 
  pdbu           = Makes a PDBU exclusive backup if set interval is reached.
  pdbu --force   = Disregards set interval and forces an On-Demand backup.
- pdbu --help    = Prints this help information.
+ pdbu --help    = Prints a help page.
  pdbu --restore = Fully restores system's /home directory.
  pdbu --log     = Prints the log file to screen.
  pdbu --check   = Checks if backup is due and notifies user via a text box.
