@@ -1,0 +1,72 @@
+# Example PDBU configuration.
+#
+# The real file lives at ~/.config/pdbu/config.toml and is created with
+# defaults the first time you run any `pdbu` command. Edit it with
+# `pdbu config --edit`, or copy pieces of this example into it by hand.
+#
+# Find your drives' UUIDs with `pdbu drives` after connecting them once
+# unencrypted/unlocked, or with `lsblk -o NAME,UUID,FSTYPE` /
+# `sudo cryptsetup luksUUID /dev/sdXN`.
+
+[source]
+home_directory = "/home/alice"
+
+[backup]
+delete_removed_files = true   # mirror deletions (rsync --delete)
+dry_run_first = true          # show a preview before every real backup
+preserve_acls = true
+preserve_xattrs = true
+preserve_hard_links = true
+numeric_ids = true
+verify_destination = true     # re-check identity/space right before backing up
+delete_confirm_threshold = 50 # ask before deleting more than this many files
+bandwidth_limit_kbps = 0      # 0 = unlimited
+extra_rsync_options = []      # e.g. ["--partial"]
+
+[exclusions]
+additional = ["Videos/", "*.iso"]
+
+[exclusions.defaults_enabled]
+".cache/" = true
+".gvfs/" = true
+".local/share/Trash/" = true
+"Downloads/" = false          # off by default — enable explicitly if wanted
+
+[drive_a]
+name = "Backup Drive A"
+luks_uuid = "1a2b3c4d-0000-0000-0000-000000000001"
+filesystem_uuid = "5e6f7a8b-0000-0000-0000-000000000002"
+mount_point = "/media/alice/PDBU-A"
+lock_after_backup = true
+
+[drive_b]
+name = "Backup Drive B"
+luks_uuid = "1a2b3c4d-0000-0000-0000-000000000003"
+filesystem_uuid = "5e6f7a8b-0000-0000-0000-000000000004"
+mount_point = "/media/alice/PDBU-B"
+lock_after_backup = true
+
+[ssh]
+enabled = false
+host = "backup.example.com"
+port = 22
+username = "alice"
+destination = "/backups/alice-home"
+identity_file = "~/.ssh/id_ed25519"
+host_alias = ""                # or an entry from ~/.ssh/config, e.g. "backup-nas"
+use_password_auth = false
+strict_host_key_checking = true
+connect_timeout_seconds = 10
+bandwidth_limit_kbps = 0
+
+[reminders]
+interval_days = 7
+snooze_hours = 24
+notifications_enabled = true
+
+[logging]
+retention_days = 90
+verbose = false
+
+[gui]
+theme = "system"

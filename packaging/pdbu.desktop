@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PDBU
+GenericName=Personal Directory Backup Utility
+Comment=Back up and restore your home directory with rsync
+Exec=pdbu-gui
+Icon=pdbu
+Terminal=false
+Categories=Utility;Archiving;
+StartupNotify=true
+Keywords=backup;restore;rsync;luks;ssh;

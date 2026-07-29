@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodically check whether a PDBU backup is due
+
+[Timer]
+# Run shortly after login/boot, then hourly. pdbu reminder-check itself
+# decides whether a notification is actually warranted (based on the
+# configured interval and re-notification throttling), so running this
+# hourly does not mean the user is notified hourly.
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

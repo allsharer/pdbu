@@ -1,0 +1,93 @@
+.TH PDBU 1 "2026" "pdbu 1.0.0" "PDBU Manual"
+.SH NAME
+pdbu \- Personal Directory Backup Utility: back up and restore a home directory with rsync
+.SH SYNOPSIS
+.B pdbu
+[\fIGLOBAL OPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]...
+.PP
+.B pdbu-gui
+.SH DESCRIPTION
+PDBU creates a one-to-one mirrored backup of a user's home directory using
+.BR rsync (1),
+to a local LUKS-encrypted external drive or a remote host over SSH, and can
+restore from either. It provides both this command-line interface and a
+GTK4 graphical interface (\fBpdbu-gui\fR); both use the same backup and
+restore engine, so behaviour is identical between them.
+.SH GLOBAL OPTIONS
+.TP
+.BR \-v ", " \-\-verbose
+Show detailed output.
+.TP
+.BR \-q ", " \-\-quiet
+Only show errors.
+.TP
+.BR \-y ", " \-\-yes
+Assume yes to confirmation prompts (required for non-interactive use of
+destructive operations).
+.SH COMMANDS
+.TP
+.B status \fR[\fB\-\-json\fR]
+Show a dashboard-style summary: last successful backup, schedule, drive and
+SSH status, recent operations.
+.TP
+.B backup \fR[\fB\-\-drive\-a\fR|\fB\-\-drive\-b\fR|\fB\-\-ssh\fR] [\fB\-\-dry\-run\fR]
+Run a backup. Without a destination flag, PDBU uses the recommended
+(alternating) drive.
+.TP
+.B restore \fB\-\-source\fR {drive\-a,drive\-b,ssh} [\fB\-\-path\fR \fIP\fR ...] [\fB\-\-destination\fR \fIDIR\fR] [\fB\-\-conflict\fR \fIMODE\fR] [\fB\-\-mirror\-delete\fR] [\fB\-\-dry\-run\fR]
+Restore all or selected content from a backup. \fB\-\-conflict\fR is one of
+\fBoverwrite\fR, \fBskip\fR, \fBnewer\fR, \fBask\fR, \fBrename\fR.
+.TP
+.B drives \fR[\fB\-\-json\fR]
+Show configured/connected backup drive status and the recommended next
+drive to alternate to.
+.TP
+.B history \fR[\fB\-\-json\fR] [\fB\-\-limit\fR \fIN\fR] [\fB\-\-type\fR \fITYPE\fR]
+Show past backup/restore operations.
+.TP
+.B logs \fR[\fIOPERATION_ID\fR] [\fB\-\-tail\fR \fIN\fR]
+Show the log file for one operation, or list recent operations and their
+log paths.
+.TP
+.B verify \fR[\fB\-\-drive\-a\fR|\fB\-\-drive\-b\fR|\fB\-\-ssh\fR] [\fB\-\-json\fR]
+Compare source and destination without modifying either.
+.TP
+.B config \fR[\fB\-\-edit\fR] [\fB\-\-show\fR] [\fB\-\-json\fR]
+Show or edit the TOML configuration file.
+.TP
+.B schedule \fR[\fB\-\-interval\fR \fIVALUE\fR]
+Show or set the backup reminder interval (e.g. \fB7d\fR, \fB24h\fR).
+.TP
+.B reminder\-check
+Check whether a backup is due and show a desktop notification if so. Used
+by the \fBpdbu\-reminder.timer\fR systemd user timer; safe to run manually.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+General error.
+.TP
+.B 2
+Usage error (bad arguments).
+.TP
+.B 3
+A confirmation was required and not given.
+.TP
+.B 4
+A safety check refused the operation (dangerous path, identity mismatch, etc).
+.SH FILES
+.TP
+.I ~/.config/pdbu/config.toml
+Configuration.
+.TP
+.I ~/.local/share/pdbu/history.sqlite3
+Operation history database.
+.TP
+.I ~/.local/state/pdbu/logs/
+Per-operation log files.
+.SH SEE ALSO
+.BR rsync (1),
+.BR ssh (1),
+.BR cryptsetup (8)
