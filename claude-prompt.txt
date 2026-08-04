@@ -1,0 +1,650 @@
+# Build PDBU — Personal Directory Backup Utility
+
+Create a secure, reliable Linux application named **PDBU (Personal Directory Backup Utility)** for backing up and restoring a user’s `/home` directory.
+
+The application will primarily target **Ubuntu Linux** and must provide both a graphical interface and a command-line interface.
+
+## 1. Primary Purpose
+
+PDBU must:
+
+* Back up the contents of a selected `/home/<username>` directory.
+* Restore files from a previous backup.
+* Use `rsync` as the underlying backup and restore engine.
+* Create a true one-to-one mirror of the source directory.
+* Support local external-drive backups and remote backups over SSH.
+* Remind the user when a backup is due.
+
+## 2. Backup Method
+
+Use `rsync` to create an exact mirror of the selected home directory.
+
+The backup must preserve, where supported:
+
+* Directory structure
+* File ownership
+* User and group permissions
+* Timestamps
+* Symbolic links
+* Hard links
+* Extended attributes
+* Access Control Lists
+* Hidden files and directories
+
+The backup destination should reflect the current state of the source directory. Files deleted from the source should be removed from the mirrored destination after the user is clearly warned and confirms the operation.
+
+Use appropriate `rsync` options, such as:
+
+```bash
+rsync -aHAX --numeric-ids --delete
+```
+
+Add any other options required for safe, accurate operation.
+
+Do not blindly copy temporary, virtual, mounted or inappropriate system locations that may exist beneath the home directory. Provide a configurable exclusion system.
+
+Default exclusions may include:
+
+```text
+.cache/
+.gvfs/
+.local/share/Trash/
+Downloads/
+```
+
+However, the user must be able to enable, disable, add or remove exclusions. Do not exclude `Downloads` by default unless the user explicitly chooses that option.
+
+## 3. External LUKS Backup Drives
+
+Backups will normally be stored on two external drives containing LUKS-encrypted partitions.
+
+The drives will be alternated so that one can be stored separately while the other is used for the current backup.
+
+PDBU must:
+
+* Detect connected storage devices.
+* Identify configured backup drives reliably by UUID, LUKS UUID, filesystem UUID or another persistent identifier.
+* Never depend solely on device names such as `/dev/sdb1`, because these can change.
+* Show whether Backup Drive A or Backup Drive B is connected.
+* Indicate which drive was used for the previous backup.
+* Recommend the alternate drive for the next backup.
+* Detect whether the selected LUKS partition is locked or unlocked.
+* Allow the user to unlock the drive securely.
+* Use the system’s existing LUKS and desktop authentication mechanisms where practical.
+* Never store the LUKS passphrase in plain text.
+* Mount the unlocked filesystem at a safe, predictable mount point.
+* Verify that the mounted drive is the expected configured backup drive.
+* Verify that sufficient free space is available.
+* Safely unmount and optionally close the LUKS container after the backup.
+* Warn the user before backing up to a drive that was used for the previous backup.
+
+The user should be able to configure and label the two destinations as:
+
+* Backup Drive A
+* Backup Drive B
+
+## 4. SSH Backup Support
+
+Provide an SSH backup option for copying the home directory to a remote Linux system.
+
+SSH backup configuration must support:
+
+* Remote hostname or IP address
+* SSH port
+* Remote username
+* Remote destination path
+* Password authentication, when necessary
+* SSH key authentication
+* Selection of a private key
+* Optional SSH host alias from `~/.ssh/config`
+* Connection testing
+* Host-key verification
+* Remote free-space checking
+* Configurable bandwidth limitation
+* Configurable SSH connection timeout
+
+Use `rsync` over SSH, for example:
+
+```bash
+rsync -aHAX --numeric-ids --delete -e "ssh -p PORT" SOURCE USER@HOST:DESTINATION
+```
+
+Do not disable SSH host-key checking by default.
+
+Clearly warn the user when the remote destination filesystem cannot preserve Linux ownership, permissions, ACLs or extended attributes.
+
+## 5. Restore Features
+
+PDBU must support restoration from either:
+
+* Backup Drive A
+* Backup Drive B
+* An SSH backup destination
+
+Provide the following restore modes:
+
+### Full Restore
+
+Restore the complete backed-up home directory.
+
+### Selected Restore
+
+Allow the user to browse the backup and select individual:
+
+* Files
+* Directories
+* Groups of files or directories
+
+### Restore to Original Location
+
+Restore selected content to its original path.
+
+### Restore to Alternative Location
+
+Restore content to a user-selected directory without overwriting the current home directory.
+
+### Overwrite Behaviour
+
+Before restoring, allow the user to choose how conflicts are handled:
+
+* Overwrite existing files
+* Skip existing files
+* Restore only newer files
+* Ask before overwriting
+* Rename restored conflicting files
+
+Before performing a destructive full restore, display a clear summary and require explicit confirmation.
+
+Provide a restore preview or dry-run mode before making changes.
+
+## 6. Graphical User Interface
+
+Create a clean, simple and accessible desktop interface suitable for Ubuntu.
+
+Use a Linux-friendly GUI toolkit such as:
+
+* GTK 4 with Python and PyGObject, or
+* Qt/PySide6
+
+Prefer GTK 4 and PyGObject when practical for strong Ubuntu desktop integration.
+
+The GUI should include the following main sections:
+
+### Dashboard
+
+Display:
+
+* Last successful backup date and time
+* Time elapsed since the previous backup
+* Next backup due date
+* Last-used backup drive
+* Recommended next backup drive
+* Connected backup-drive status
+* SSH destination status
+* Most recent backup result
+* Number of warnings or errors
+* Current backup schedule
+
+### Back Up Now
+
+Allow the user to:
+
+* Choose a local or SSH destination
+* Select Backup Drive A or Backup Drive B
+* View the detected source and destination
+* Run a dry run
+* Start the backup
+* Cancel a running backup
+* View progress and current filename
+* View transferred data
+* View transfer speed
+* View estimated completion progress where reasonably possible
+
+### Restore
+
+Allow the user to:
+
+* Choose a backup source
+* Browse backup contents
+* Search for files
+* Select content to restore
+* Choose the restore destination
+* Preview the restore
+* Start and cancel the restore
+
+### Backup History
+
+Display:
+
+* Date and time
+* Destination
+* Drive label
+* Backup type
+* Duration
+* Amount of data transferred
+* Number of files transferred
+* Result
+* Warnings
+* Errors
+* Log-file location
+
+### Settings
+
+Allow configuration of:
+
+* Source home directory
+* Backup Drive A
+* Backup Drive B
+* SSH destination
+* Backup reminder interval
+* Default exclusions
+* Additional exclusions
+* Whether to use `--delete`
+* Whether to run a dry run before the real operation
+* Whether to verify destination availability
+* Whether to unmount and lock the LUKS drive after backup
+* Notification preferences
+* Log-retention duration
+* Bandwidth limit
+* Theme preferences
+* Advanced `rsync` options
+
+## 7. Command-Line Interface
+
+Provide a complete terminal interface using a command such as:
+
+```bash
+pdbu
+```
+
+Possible commands (However, you have full design powers to decide):
+
+```bash
+pdbu status
+pdbu backup
+pdbu backup --drive-a
+pdbu backup --drive-b
+pdbu backup --ssh
+pdbu backup --dry-run
+pdbu restore
+pdbu restore --source drive-a
+pdbu restore --source drive-b
+pdbu restore --source ssh
+pdbu restore --path Documents/example.txt
+pdbu restore --destination /path/to/restore
+pdbu drives
+pdbu history
+pdbu logs
+pdbu verify
+pdbu config
+pdbu config --edit
+pdbu schedule
+pdbu schedule --interval 7d
+```
+
+The CLI must:
+
+* Provide useful `--help` output.
+* Return meaningful exit codes.
+* Support non-interactive operation where safe.
+* Require explicit confirmation or a force option before destructive operations.
+* Produce readable terminal output.
+* Support optional verbose and quiet modes.
+* Support machine-readable JSON output for status and history commands.
+
+Example:
+
+```bash
+pdbu status --json
+```
+
+## 8. Backup Reminders
+
+PDBU must remind the user when a backup is due.
+
+The user must be able to configure the interval using values such as:
+
+* Every day
+* Every 3 days
+* Every 7 days
+* Every 14 days
+* Every 30 days
+* A custom number of days or hours
+
+The reminder system must:
+
+* Remember the last successful backup time.
+* Base reminders on successful backups, not merely attempted backups.
+* Display a desktop notification when a backup becomes due.
+* Provide actions such as:
+
+  * Back Up Now
+  * Remind Me Later
+  * Open PDBU
+  * Dismiss
+* Allow the user to configure the “remind me later” duration.
+* Continue reminding at a reasonable interval until a successful backup is completed.
+* Avoid excessive or repeated notifications.
+
+Use a user-level `systemd` timer and service where appropriate.
+
+Do not require PDBU to remain open continuously for reminders to work.
+
+## 9. Privileges and Security
+
+PDBU should run as the normal user whenever possible.
+
+Privilege elevation should only be requested for operations that genuinely require it, such as:
+
+* Unlocking or mounting certain encrypted drives
+* Preserving ownership that requires elevated access
+* Restoring protected files
+* Installing system integrations
+
+Use PolicyKit or another appropriate desktop privilege mechanism rather than running the entire application as root.
+
+Security requirements:
+
+* Never store passwords or LUKS passphrases in plain text.
+* Use the desktop keyring for secrets when storage is requested.
+* Quote and validate all shell arguments.
+* Avoid shell-command injection.
+* Prefer safe subprocess argument arrays instead of `shell=True`.
+* Verify source and destination paths before running `rsync`.
+* Refuse dangerous destination paths such as `/`, `/home`, or the source directory itself.
+* Detect when the destination is located inside the source.
+* Detect when the source is located inside the destination.
+* Prevent accidental deletion caused by a missing or incorrectly mounted backup drive.
+* Before using `--delete`, verify the destination using its persistent drive identity.
+* Do not follow untrusted symbolic links in ways that could escape the intended source or destination.
+* Protect configuration files and logs with suitable permissions.
+
+## 10. Critical Backup Safety Checks
+
+Before every backup, PDBU must verify:
+
+1. The source directory exists.
+2. The source is readable.
+3. The destination exists.
+4. The intended external drive is genuinely mounted.
+5. The destination matches the configured UUID or persistent identity.
+6. The destination is not the root filesystem.
+7. The destination is not the source directory.
+8. The source and destination are not nested incorrectly.
+9. The destination has sufficient free space.
+10. The previous operation did not leave an incomplete state requiring attention.
+11. The user has confirmed the deletion behaviour when mirroring.
+
+Never create a backup in an ordinary empty mount-point directory when the expected external drive is not actually mounted.
+
+For example, if `/media/user/PDBU-A` exists but the external drive is not mounted there, PDBU must refuse to proceed.
+
+## 11. Dry Run and Confirmation
+
+Provide a dry-run function using:
+
+```bash
+rsync --dry-run
+```
+
+The dry-run report should summarise:
+
+* Files to be added
+* Files to be updated
+* Files to be deleted
+* Estimated amount of data to transfer
+* Major warnings
+* Excluded content
+
+Before a backup using `--delete`, show the number of files expected to be deleted and require confirmation when the number exceeds a configurable safety threshold.
+
+## 12. Logging and History
+
+Maintain detailed logs for backup and restore operations.
+
+Each log should record:
+
+* Operation ID
+* Start time
+* End time
+* Source
+* Destination
+* Destination UUID or SSH host
+* Backup or restore mode
+* Command options used
+* Number of files examined
+* Number of files transferred
+* Amount of data transferred
+* Files deleted
+* Warnings
+* Errors
+* Exit code
+* Final result
+
+Store application data under appropriate XDG paths, such as:
+
+```text
+~/.config/pdbu/
+~/.local/share/pdbu/
+~/.local/state/pdbu/
+~/.cache/pdbu/
+```
+
+Do not place configuration or logs directly in the user’s home-directory root.
+
+Provide an option to export or copy a diagnostic report, but redact passwords, passphrases and other secrets.
+
+## 13. Backup Verification
+
+After a backup completes:
+
+* Check the `rsync` exit code.
+* Record whether the backup completed successfully, partially or unsuccessfully.
+* Allow an optional verification pass.
+* Provide a command that compares the source and destination without modifying either.
+* Clearly report differences.
+* Update the “last successful backup” date only after the operation is confirmed successful.
+
+Suggested command:
+
+```bash
+pdbu verify --drive-a
+```
+
+## 14. Configuration
+
+Use a human-readable configuration format such as TOML.
+
+Example:
+
+```toml
+[source]
+home_directory = "/home/username"
+
+[backup]
+delete_removed_files = true
+dry_run_first = true
+preserve_acls = true
+preserve_xattrs = true
+preserve_hard_links = true
+
+[drive_a]
+name = "Backup Drive A"
+luks_uuid = ""
+filesystem_uuid = ""
+mount_point = "/media/username/PDBU-A"
+
+[drive_b]
+name = "Backup Drive B"
+luks_uuid = ""
+filesystem_uuid = ""
+mount_point = "/media/username/PDBU-B"
+
+[ssh]
+enabled = false
+host = ""
+port = 22
+username = ""
+destination = ""
+identity_file = ""
+
+[reminders]
+interval_days = 7
+snooze_hours = 24
+notifications_enabled = true
+
+[logging]
+retention_days = 90
+```
+
+Include configuration validation and helpful error messages.
+
+## 15. Architecture
+
+Use a modular architecture that separates:
+
+* GUI
+* CLI
+* Configuration
+* Backup engine
+* Restore engine
+* `rsync` command construction
+* SSH operations
+* LUKS and mount handling
+* Device detection
+* Notification handling
+* Scheduling
+* Logging
+* Backup history
+* Safety validation
+* Progress parsing
+
+The GUI and CLI must use the same underlying backup and restore services so that behaviour remains consistent.
+
+Do not duplicate core backup logic separately in the GUI and CLI.
+
+## 16. Technology Preferences
+
+Possible implementation (However, you have full design powers to decide the implementation):
+
+* Python 3
+* GTK 4
+* PyGObject
+* nginx
+* `argparse`, Click or Typer for the CLI
+* `rsync`
+* OpenSSH
+* `cryptsetup`
+* `lsblk`
+* `findmnt`
+* `udisksctl`
+* `systemd` user services and timers
+* TOML configuration
+* SQLite for operation history, if appropriate
+* Standard Python logging
+
+Where practical, interact with system utilities through documented command-line interfaces or D-Bus APIs.
+
+## 17. Packaging and Installation
+
+Provide:
+
+* A proper Python project structure
+* A `pyproject.toml` file
+* An installation script
+* An uninstallation script
+* A `.desktop` launcher
+* An application icon
+* A manual page
+* Shell-completion support where practical
+* A `systemd` user service and timer for reminders
+* Dependency checking
+* Ubuntu installation instructions
+* Upgrade instructions
+* Example configuration
+* A README
+* Troubleshooting documentation
+
+The installation process should make the following commands available:
+
+```bash
+pdbu
+pdbu-gui
+```
+
+The application should also appear in the Ubuntu application menu as:
+
+```text
+PDBU — Personal Directory Backup Utility
+```
+
+## 18. Testing
+
+Include automated tests for:
+
+* Configuration parsing
+* Source and destination validation
+* Mounted-drive detection
+* UUID verification
+* Alternating-drive recommendation
+* `rsync` command construction
+* Exclusion handling
+* SSH command construction
+* Backup scheduling
+* Reminder calculation
+* Restore conflict handling
+* Dangerous-path prevention
+* Dry-run parsing
+* Exit-code handling
+
+Use temporary directories and mocked commands during tests. The tests must never modify the developer’s real home directory or attached drives.
+
+## 19. Documentation
+
+The README must explain:
+
+* What PDBU does
+* What a one-to-one mirrored backup means
+* The effect and risk of `rsync --delete`
+* How to configure the two encrypted drives
+* How drive alternation works
+* How to configure SSH backups
+* How to perform a backup
+* How to perform a restore
+* How to run a dry run
+* How to verify a backup
+* How reminders work
+* How to inspect logs
+* How to recover from interrupted operations
+* How to uninstall PDBU
+
+## 20. Development Process
+
+Build the application in clear, testable stages:
+
+1. Create the project structure.
+2. Implement configuration handling.
+3. Implement safety and path validation.
+4. Implement persistent drive detection.
+5. Implement the `rsync` backup engine.
+6. Implement dry-run reporting.
+7. Implement local restore functions.
+8. Implement SSH backup and restore.
+9. Implement backup history and logging.
+10. Implement the CLI.
+11. Implement the GTK GUI.
+12. Implement desktop notifications.
+13. Implement the `systemd` reminder timer.
+14. Add packaging and installation tools.
+15. Add automated tests.
+16. Complete the documentation.
+
+At the end of each stage:
+
+* Run the relevant tests.
+* Show any errors.
+* Correct the errors before continuing.
+* Summarise the files created or changed.
+
+Do not provide only an outline, mock-up or demonstration. Produce a complete, functional application with usable source code, installation instructions and tests.
+
