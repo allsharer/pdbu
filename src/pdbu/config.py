@@ -74,6 +74,7 @@ class DriveConfig:
     luks_uuid: str = ""
     filesystem_uuid: str = ""
     mount_point: str = ""
+    backup_subdir: str = "pdbuBackups"
     lock_after_backup: bool = True
 
 
@@ -287,6 +288,11 @@ def validate(cfg: Config) -> list[str]:
     for drive_name, drive in (("drive_a", cfg.drive_a), ("drive_b", cfg.drive_b)):
         if drive.mount_point and not os.path.isabs(drive.mount_point):
             errors.append(f"{drive_name}.mount_point must be an absolute path")
+        if drive.backup_subdir:
+            if os.path.isabs(drive.backup_subdir) or ".." in Path(drive.backup_subdir).parts:
+                errors.append(
+                    f"{drive_name}.backup_subdir must be a relative path with no '..' segments"
+                )
         if not drive.luks_uuid and not drive.filesystem_uuid:
             warnings.append(
                 f"{drive_name} has no luks_uuid or filesystem_uuid configured; "

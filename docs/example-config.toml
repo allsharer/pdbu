@@ -37,6 +37,12 @@ name = "Backup Drive A"
 luks_uuid = "1a2b3c4d-0000-0000-0000-000000000001"
 filesystem_uuid = "5e6f7a8b-0000-0000-0000-000000000002"
 mount_point = "/media/alice/PDBU-A"
+# Subdirectory under the mount point PDBU backs up into, so the rest of
+# the drive stays free for other uses. The actual backup is further
+# namespaced by this machine's hostname (e.g. "pdbuBackups/fhdt/"), so
+# one drive can hold backups from several machines side by side. Set to
+# "" to mirror the whole drive root instead (the pre-1.0 behaviour).
+backup_subdir = "pdbuBackups"
 lock_after_backup = true
 
 [drive_b]
@@ -44,6 +50,7 @@ name = "Backup Drive B"
 luks_uuid = "1a2b3c4d-0000-0000-0000-000000000003"
 filesystem_uuid = "5e6f7a8b-0000-0000-0000-000000000004"
 mount_point = "/media/alice/PDBU-B"
+backup_subdir = "pdbuBackups"
 lock_after_backup = true
 
 [ssh]

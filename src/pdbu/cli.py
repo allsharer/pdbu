@@ -12,7 +12,6 @@ import json
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 import click
 
@@ -511,6 +510,7 @@ def restore(
 def drives(clictx: CliContext, as_json: bool):
     """Show connected/configured backup drive status."""
     svc = clictx.service()
+    cfg = svc.cfg
     statuses = svc.drive_statuses()
     last = svc.history.last_successful_backup()
     recommended = devices.recommend_next_drive(last.mode if last else None)
@@ -518,6 +518,12 @@ def drives(clictx: CliContext, as_json: bool):
     if as_json:
         data = {}
         for key, s in statuses.items():
+            drive_cfg = cfg.drive_a if key == "drive_a" else cfg.drive_b
+            backup_path = (
+                service_mod.local_backup_dir(s.mountpoint, drive_cfg)
+                if s.mounted and s.mountpoint and drive_cfg.backup_subdir
+                else None
+            )
             data[key] = {
                 "label": s.label,
                 "configured": s.configured,
@@ -525,6 +531,7 @@ def drives(clictx: CliContext, as_json: bool):
                 "locked": s.locked,
                 "mounted": s.mounted,
                 "mountpoint": s.mountpoint,
+                "backup_path": backup_path,
                 "identity_verified": s.identity_verified,
             }
         data["recommended_next"] = recommended
@@ -545,6 +552,10 @@ def drives(clictx: CliContext, as_json: bool):
             click.echo(f"  Encrypted (LUKS): {s.is_luks}")
             click.echo(f"  Locked: {s.locked}")
             click.echo(f"  Mounted: {s.mounted}" + (f" at {s.mountpoint}" if s.mounted else ""))
+            drive_cfg = cfg.drive_a if key == "drive_a" else cfg.drive_b
+            if s.mounted and s.mountpoint and drive_cfg.backup_subdir:
+                backup_path = service_mod.local_backup_dir(s.mountpoint, drive_cfg)
+                click.echo(f"  Backup path: {backup_path}")
             click.echo(f"  Identity verified: {s.identity_verified}")
     svc.close()
 

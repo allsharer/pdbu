@@ -152,8 +152,11 @@ class SettingsView(Gtk.Box):
         mount_entry = _entry(drive_cfg.mount_point)
         _row(grid, 3, "Last-known mount point", mount_entry)
 
+        subdir_entry = _entry(drive_cfg.backup_subdir)
+        _row(grid, 4, "Backup subdirectory", subdir_entry)
+
         lock_switch = _switch(drive_cfg.lock_after_backup)
-        _row(grid, 4, "Unmount and lock after backup", lock_switch)
+        _row(grid, 5, "Unmount and lock after backup", lock_switch)
 
         detect_btn = Gtk.Button(label="Detect from connected drives…")
         detect_btn.connect("clicked", lambda *_: self._on_detect_drive(luks_entry, fs_entry, mount_entry))
@@ -163,6 +166,7 @@ class SettingsView(Gtk.Box):
         setattr(self, f"{key}_luks_entry", luks_entry)
         setattr(self, f"{key}_fs_entry", fs_entry)
         setattr(self, f"{key}_mount_entry", mount_entry)
+        setattr(self, f"{key}_subdir_entry", subdir_entry)
         setattr(self, f"{key}_lock_switch", lock_switch)
         return box
 
@@ -406,12 +410,14 @@ class SettingsView(Gtk.Box):
         cfg.drive_a.luks_uuid = self.drive_a_luks_entry.get_text()
         cfg.drive_a.filesystem_uuid = self.drive_a_fs_entry.get_text()
         cfg.drive_a.mount_point = self.drive_a_mount_entry.get_text()
+        cfg.drive_a.backup_subdir = self.drive_a_subdir_entry.get_text()
         cfg.drive_a.lock_after_backup = self.drive_a_lock_switch.get_active()
 
         cfg.drive_b.name = self.drive_b_name_entry.get_text()
         cfg.drive_b.luks_uuid = self.drive_b_luks_entry.get_text()
         cfg.drive_b.filesystem_uuid = self.drive_b_fs_entry.get_text()
         cfg.drive_b.mount_point = self.drive_b_mount_entry.get_text()
+        cfg.drive_b.backup_subdir = self.drive_b_subdir_entry.get_text()
         cfg.drive_b.lock_after_backup = self.drive_b_lock_switch.get_active()
 
         cfg.ssh.enabled = self.ssh_enabled_switch.get_active()

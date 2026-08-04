@@ -11,6 +11,8 @@ guaranteed to match between the two front ends.
 from __future__ import annotations
 
 import logging
+import os
+import socket
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -61,6 +63,27 @@ def _drive_config(cfg: Config, drive_key: str) -> DriveConfig:
     if drive_key == "drive_b":
         return cfg.drive_b
     raise ServiceError(f"Unknown drive key: {drive_key!r}")
+
+
+def backup_hostname() -> str:
+    """Short hostname of this machine, used to namespace backups on a drive.
+
+    Lets one drive hold backups from several machines side by side
+    (``<mount>/<backup_subdir>/<hostname>/``) instead of only ever
+    supporting a single source machine per drive.
+    """
+    return socket.gethostname().split(".")[0]
+
+
+def local_backup_dir(mountpoint: str, drive_cfg: DriveConfig) -> str:
+    """Where backups for this drive actually live under its mount point.
+
+    Empty ``backup_subdir`` opts back out into mirroring the mount point
+    itself (the pre-hostnamed, whole-drive behaviour).
+    """
+    if not drive_cfg.backup_subdir:
+        return mountpoint
+    return os.path.join(mountpoint, drive_cfg.backup_subdir, backup_hostname())
 
 
 class DashboardStatus:
@@ -183,9 +206,18 @@ class PdbuService:
         if blocking:
             raise ServiceError("; ".join(blocking))
 
+        local_path = local_backup_dir(status.mountpoint, drive_cfg)
+        if local_path != status.mountpoint:
+            try:
+                os.makedirs(local_path, exist_ok=True)
+            except OSError as exc:
+                raise ServiceError(
+                    f"Could not create backup directory {local_path}: {exc}"
+                ) from exc
+
         return DestinationSpec(
             kind=drive_key,
-            local_path=status.mountpoint,
+            local_path=local_path,
             drive_status=status,
             destination_identity=status.filesystem_uuid or drive_cfg.filesystem_uuid,
         )

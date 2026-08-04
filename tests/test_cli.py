@@ -8,12 +8,13 @@ redirected into tmp_path so nothing touches the real ~/.config/pdbu.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from pdbu import cli as cli_mod
-from pdbu import config, devices
+from pdbu import config, devices, service
 
 
 @pytest.fixture
@@ -49,7 +50,8 @@ def cli_env(tmp_path, xdg_env, monkeypatch):
 
     monkeypatch.setattr(devices, "detect_drive_status", fake_detect)
 
-    return {"source": source, "drive_mount": drive_mount}
+    backup_root = Path(service.local_backup_dir(str(drive_mount), cfg.drive_a))
+    return {"source": source, "drive_mount": drive_mount, "backup_root": backup_root}
 
 
 @pytest.fixture
@@ -65,7 +67,7 @@ def test_status_exit_code_ok(cli_env, runner):
 def test_backup_and_verify_and_history(cli_env, runner):
     result = runner.invoke(cli_mod.cli, ["-q", "backup", "--drive-a"])
     assert result.exit_code == cli_mod.EXIT_OK, result.output
-    assert (cli_env["drive_mount"] / "doc.txt").read_text() == "hello"
+    assert (cli_env["backup_root"] / "doc.txt").read_text() == "hello"
 
     verify_result = runner.invoke(cli_mod.cli, ["verify", "--drive-a", "--json"])
     assert verify_result.exit_code == cli_mod.EXIT_OK
@@ -134,10 +136,9 @@ def test_config_show_and_json(cli_env, runner):
 
 
 def test_dry_run_backup_does_not_write(cli_env, runner):
-    (cli_env["drive_mount"] / "sentinel_should_not_appear.txt").unlink(missing_ok=True)
     result = runner.invoke(cli_mod.cli, ["backup", "--drive-a", "--dry-run"])
     assert result.exit_code == cli_mod.EXIT_OK
-    assert not (cli_env["drive_mount"] / "doc.txt").exists()
+    assert not (cli_env["backup_root"] / "doc.txt").exists()
 
 
 def test_delete_confirmation_required_without_yes(cli_env, runner, monkeypatch):
@@ -163,4 +164,4 @@ def test_delete_confirmed_with_yes_flag(cli_env, runner):
 
     result = runner.invoke(cli_mod.cli, ["-y", "backup", "--drive-a"])
     assert result.exit_code == cli_mod.EXIT_OK
-    assert not (cli_env["drive_mount"] / "doc.txt").exists()
+    assert not (cli_env["backup_root"] / "doc.txt").exists()

@@ -82,6 +82,17 @@ For each of `[drive_a]` / `[drive_b]`, set:
 - `filesystem_uuid` — the UUID of the filesystem *inside* the unlocked
   container (shown once you've unlocked it at least once, via `lsblk -o
   NAME,UUID` or `pdbu drives`).
+- `backup_subdir` — a subdirectory under the mount point PDBU backs up
+  into (default `pdbuBackups`), rather than mirroring straight to the
+  drive's root. This keeps the drive free for other uses — e.g. a large
+  disk could also hold `/media/trevor/PDBU-Drive-B/PermFiles/` alongside
+  `/media/trevor/PDBU-Drive-B/pdbuBackups/`. Inside that subdirectory,
+  PDBU further namespaces the backup by this machine's hostname (e.g.
+  `pdbuBackups/fhdt/`), so the same drive can hold backups from several
+  machines without them overwriting each other. `--delete` only ever
+  applies inside `<backup_subdir>/<hostname>/`. Set `backup_subdir` to
+  an empty string to restore the old whole-drive-mirror behaviour (no
+  subdirectory, no hostname namespacing).
 - `lock_after_backup` — whether to unmount and re-lock the LUKS container
   automatically after each backup.
 
