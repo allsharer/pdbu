@@ -66,6 +66,7 @@ class SettingsView(Gtk.Box):
         self.append(save_box)
 
         self._built = False
+        self._status_clear_source_id: int | None = None
 
     def refresh(self) -> None:
         if self._built:
@@ -468,4 +469,15 @@ class SettingsView(Gtk.Box):
             self.status_label.set_label(f"Invalid configuration: {exc}")
             return
         self.window.app.reload_config()
-        self.status_label.set_label("Settings saved.")
+        self._set_status_temporarily("Settings saved.", seconds=3)
+
+    def _set_status_temporarily(self, message: str, *, seconds: int) -> None:
+        if self._status_clear_source_id is not None:
+            GLib.source_remove(self._status_clear_source_id)
+        self.status_label.set_label(message)
+        self._status_clear_source_id = GLib.timeout_add_seconds(seconds, self._clear_status)
+
+    def _clear_status(self) -> bool:
+        self.status_label.set_label("")
+        self._status_clear_source_id = None
+        return GLib.SOURCE_REMOVE
